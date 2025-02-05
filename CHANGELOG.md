@@ -43,7 +43,6 @@ position = [robot.state.location.x, robot.state.location.y]
 
 - `RMFNavToPose.py`
   - Action Client 변경 `navigate_to_pose` -> `follow_gps_waypoints`
-  - GPS 좌표 대신 `robot.state.location` 값을 사용하도록 변경  
   - `update_robot_state()`내에 `makeup_robot_state_publisher()` 호출하는 부분 주석
 
 #### **변경된 코드(RMFNavToPose.py)**
