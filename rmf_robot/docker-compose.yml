@@ -1,0 +1,119 @@
+# version: '3' `version` is obsolete
+services:
+  iron:
+    build:
+      context: docker
+      dockerfile: Dockerfile.iron
+    image: rmf_iron
+    tty: true
+
+  rmf:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rmf_robot
+    tty: true
+
+  sim:
+    image: rmf_robot
+    privileged: true
+    environment:
+      - DISPLAY=${DISPLAY}
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/usr/local/share/middleware_profiles/rtps_udp_profile.xml
+      - XDG_RUNTIME_DIR=/run/user/$(id -u)
+      - TURTLEBOT3_MODEL=waffle
+      - GAZEBO_MODEL_PATH=/root/ws/install/turtlebot3_gazebo/share/turtlebot3_gazebo/models:/root/ws/install/aws_robomaker_small_warehouse_world/share/aws_robomaker_small_warehouse_world/models
+    volumes:
+      # display
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      # usb device
+      - /dev/bus/usb:/dev/bus/usb
+      - /run/udev:/run/udev:ro
+      - /dev:/dev
+      - /dev/input:/dev/input
+      # middleware profiles
+      - ./docker/middleware_profiles:/usr/local/share/middleware_profiles
+    tty: true
+    command: [ "/bin/bash", "-c", "source /root/ws/install/setup.bash && ros2 launch rmf_demos_gz_classic office_simulation.launch.xml use_sim_time:=True headless:=False" ]
+    network_mode: host
+
+  nav2:
+    image: rmf_robot
+    privileged: true
+    environment:
+      - DISPLAY=${DISPLAY}
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/usr/local/share/middleware_profiles/rtps_udp_profile.xml
+      - XDG_RUNTIME_DIR=/run/user/$(id -u)
+      - TURTLEBOT3_MODEL=waffle
+      - GAZEBO_MODEL_PATH=/root/ws/install/turtlebot3_gazebo/share/turtlebot3_gazebo/models:/root/ws/install/aws_robomaker_small_warehouse_world/share/aws_robomaker_small_warehouse_world/models
+    volumes:
+      # display
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      # middleware profiles
+      - ./docker/middleware_profiles:/usr/local/share/middleware_profiles
+    tty: true
+    command: [ "/bin/bash", "-c", "source /root/ws/install/setup.bash && ros2 launch rmf_demos_gz_classic office_with_nav2.launch.py use_sim_time:=True headless:=False" ]
+    network_mode: host
+    
+  gps:
+    image: rmf_robot
+    privileged: true
+    environment:
+      - DISPLAY=${DISPLAY}
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/usr/local/share/middleware_profiles/rtps_udp_profile.xml
+      - XDG_RUNTIME_DIR=/run/user/$(id -u)
+      - TURTLEBOT3_MODEL=waffle
+      - GAZEBO_MODEL_PATH=/opt/ros/iron/share/turtlebot3_gazebo/models
+    volumes:
+      # display
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      # middleware profiles
+      - ./docker/middleware_profiles:/usr/local/share/middleware_profiles
+    tty: true
+    command: [ "/bin/bash", "-c", "source /root/ws/install/setup.bash && ros2 launch nav2_gps_waypoint_follower_demo gps_waypoint_follower.launch.py use_rviz:=True" ]
+    network_mode: host
+
+  fsm:
+    image: rmf_robot
+    privileged: true
+    environment:
+      - CONFIG_FILE=${CONFIG_FILE}
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/usr/local/share/middleware_profiles/rtps_udp_profile.xml
+    volumes:
+      - ./docker/middleware_profiles:/usr/local/share/middleware_profiles
+      - ./fsm_waypoint:/root/ws/src/fsm_waypoint
+    tty: true
+    command: ["/bin/bash", "-c", "source /root/ws/install/setup.bash && ros2 run fsm_waypoint fsm_waypoint_node"]
+    network_mode: host
+
+  gps_publisher:
+    image: rmf_robot
+    privileged: true
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/usr/local/share/middleware_profiles/rtps_udp_profile.xml
+    volumes:
+      - ./docker/middleware_profiles:/usr/local/share/middleware_profiles
+      - ./gps_websocket:/root/ws/src/gps_websocket  # GPS WebSocket 노드 경로
+    tty: true
+    command: ["/bin/bash", "-c", "source /root/ws/install/setup.bash && ros2 run nav2_gps_waypoint_follower_demo gps_websocket_publisher"]
+    network_mode: host
+
+  websocket_server:
+    image: rmf_robot
+    privileged: true
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/usr/local/share/middleware_profiles/rtps_udp_profile.xml
+    volumes:
+      - ./docker/middleware_profiles:/usr/local/share/middleware_profiles
+      - ./gps_websocket:/root/ws/src/gps_websocket  # GPS WebSocket 노드 경로
+    tty: true
+    ports:
+      - "8080:8080"
+    command: ["/bin/bash", "-c", "source /root/ws/install/setup.bash && ros2 run nav2_gps_waypoint_follower_demo websocket_server"]
+    network_mode: host

@@ -1,0 +1,15 @@
+{
+  "apps": [
+      {
+        "name": "fsm_waypoint",
+        "cwd": "/root/scripts/fsm",
+        "args": "",
+        "script": "fsm_waypoint.sh",
+        "exec_mode": "fork",
+        "exec_interpreter": "bash",
+        "log_file": "/dev/null",
+        "out_file": "/dev/null",
+        "error_file": "/dev/null"
+      }
+    ]
+  }

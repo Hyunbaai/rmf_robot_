@@ -1,0 +1,40 @@
+coordinate_system: reference_image
+crowd_sim:
+  agent_groups:
+    - {agents_name: [], agents_number: 0, group_id: 0, profile_selector: external_agent, state_selector: external_static, x: 0, y: 0}
+  agent_profiles:
+    - {ORCA_tau: 1, ORCA_tauObst: 0.40000000000000002, class: 1, max_accel: 0, max_angle_vel: 0, max_neighbors: 10, max_speed: 0, name: external_agent, neighbor_dist: 5, obstacle_set: 1, pref_speed: 0, r: 0.25}
+  enable: 0
+  goal_sets: []
+  model_types: []
+  obstacle_set: {class: 1, file_name: L1_navmesh.nav, type: nav_mesh}
+  states:
+    - {final: 1, goal_set: -1, name: external_static, navmesh_file_name: ""}
+  transitions: []
+  update_time_step: 0.10000000000000001
+graphs:
+  {}
+levels:
+  L1:
+    drawing:
+      filename: handong.png
+    elevation: 0
+    layers:
+      {}
+    measurements:
+      - [0, 1, {distance: [3, 40.229999999999997]}]
+      - [2, 3, {distance: [3, 27.57]}]
+      - [4, 5, {distance: [3, 79.329999999999998]}]
+    vertices:
+      - [1117.0809999999999, 601.48199999999997, 0, ""]
+      - [1233.7370000000001, 639.89200000000005, 0, ""]
+      - [754.82299999999998, 888.09699999999998, 0, ""]
+      - [729.21500000000003, 966.22000000000003, 0, ""]
+      - [360.471, 335.08999999999997, 0, ""]
+      - [592.48400000000004, 413.57499999999999, 0, ""]
+      - [267.50299999999999, 230.46199999999999, 0, p1]
+      - [992.64400000000001, 174.53700000000001, 0, p2]
+      - [1543.0550000000001, 601.05700000000002, 0, p3]
+      - [1282.633, 857.49099999999999, 0, p4]
+lifts: {}
+name: handong

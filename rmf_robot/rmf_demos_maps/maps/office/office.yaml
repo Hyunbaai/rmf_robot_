@@ -1,0 +1,6 @@
+image: office.png
+resolution: 0.0085  # traffic_editor L1 Scale: 0.0085 참조
+origin: [-12.949750000000002, -7.297250000000001, 0.0]  # 좌하단 원점 설정  3047x1717 -> 3047x0.0085/2=-12.0407m, 1717x0.0085/2=-7.2972m
+negate: 0
+occupied_thresh: 0.65
+free_thresh: 0.25

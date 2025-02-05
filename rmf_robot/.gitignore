@@ -1,0 +1,6 @@
+.idea
+.env
+zeta2_edu_autonomous
+.DS_Store
+cognito
+models.tar.gz

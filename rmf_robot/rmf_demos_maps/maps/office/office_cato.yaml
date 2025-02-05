@@ -1,0 +1,7 @@
+image: office_cato.pgm  # mac에서 확인 가능함.
+mode: trinary
+resolution: 0.05  # cartographer map
+origin: [-3.36, -6.2, 0]  # cartographer map
+negate: 0
+occupied_thresh: 0.65
+free_thresh: 0.25
