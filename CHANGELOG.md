@@ -13,32 +13,39 @@
 #### **변경된 코드(FleetManager.py)**
 
 ```python
-# if self.gps:
-#     while True:
-#         try:
-#             self.sio.connect('http://0.0.0.0:8080')
-#             break
-#         except Exception:
-#             self.node.get_logger().info(
-#                 f"Trying to connect to sio server at"
-#                 f"http://0.0.0.0:8080..")
-#             time.sleep(1)
+@self.sio.on("/gps")
+def message(data):
+
+    # if self.gps:
+    #     while True:
+    #         try:
+    #             self.sio.connect('http://0.0.0.0:8080')
+    #             break
+    #         except Exception:
+    #             self.node.get_logger().info(
+    #                 f"Trying to connect to sio server at"
+    #                 f"http://0.0.0.0:8080..")
+    #             time.sleep(1)
 ```
 
 ```python
 # 기존 코드 (GPS 좌표 사용)
-if self.gps:
-    position = copy.deepcopy(robot.gps_pos)
-else:
-    position = [robot.state.location.x, robot.state.location.y]
+def get_robot_state(self, robot: State, robot_name):
+    if self.gps:
+        position = copy.deepcopy(robot.gps_pos)
+    else:
+        position = [robot.state.location.x, robot.state.location.y]
 
 # 변경 후 (항상 `robot.state.location` 사용)
-position = [robot.state.location.x, robot.state.location.y]
+def get_robot_state(self, robot: State, robot_name):
+    position = [robot.state.location.x, robot.state.location.y]
 ```
 
 ```python
-# target_x -= self.offset[0]
-# target_y -= self.offset[1]
+async def navigate(robot_name: str, cmd_id: int, dest: Request):
+
+    # target_x -= self.offset[0]
+    # target_y -= self.offset[1]
 ```
 
 - `RMFNavToPose.py`
@@ -75,7 +82,8 @@ def send_goal(self, destination_pose, task_id):
 ```
 
 ```python
-# self.makeup_robot_state_publisher(rmf_x, rmf_y, target_yaw_rmf)
+def update_robot_state(self):
+    # self.makeup_robot_state_publisher(rmf_x, rmf_y, target_yaw_rmf)
 ```
 
 
