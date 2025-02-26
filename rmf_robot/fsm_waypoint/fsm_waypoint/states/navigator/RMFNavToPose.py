@@ -436,7 +436,7 @@ class RMFNavToPose(smach.State):
         if transform_stamped:
             # GPS 데이터를 TM128 좌표로 변환
             tm128_coords = self.coordinate_converter.gps_to_xy(gps_data)
-            # info(f"Converted GPS to TM128: x={tm128_coords['x']}, y={tm128_coords['y']}")
+            info(f"Converted GPS to TM128: x={tm128_coords['x']}, y={tm128_coords['y']}")
 
             orientation = euler_from_quaternion([
                 transform_stamped.transform.rotation.x,

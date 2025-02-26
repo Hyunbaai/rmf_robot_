@@ -2,6 +2,14 @@ FROM rmf_iron
 ARG DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-c"]
 
+
+RUN sed -i 's|http://security.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
+RUN rm -rf /var/lib/apt/lists/* \
+    && apt-get clean \
+    && apt-get update --fix-missing \
+    && apt-get update \
+    && apt-get upgrade -y --allow-downgrades --allow-remove-essential --allow-change-held-packages
+
 ## rolling에서는 안됨.
 RUN apt-get update && apt-get install -y ros-$ROS_DISTRO-nav2-bringup ros-$ROS_DISTRO-navigation2
 
@@ -77,6 +85,7 @@ COPY rmf_demos_gz_classic rmf_demos_gz_classic
 COPY rmf_demos_maps rmf_demos_maps
 COPY rmf_demos_panel rmf_demos_panel
 COPY rmf_demos_tasks rmf_demos_tasks
+
 
 WORKDIR /root/ws
 RUN apt-get update && source /opt/ros/$ROS_DISTRO/setup.sh && \

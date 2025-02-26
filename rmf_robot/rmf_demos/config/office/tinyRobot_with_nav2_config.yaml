@@ -33,9 +33,9 @@ rmf_fleet:
   finishing_request: "nothing" # [park, charge, nothing]
   responsive_wait: True # Should responsive wait be on/off for the whole fleet by default? False if not specified.
   robots:
-    seongsubot1:
-      charger: "tank_orange_charger"
-      responsive_wait: False
+    seongsubot2:
+      charger: "Genesis_Station(blue)"
+      responsive_wait: True
 #    tinybot2:
 #      charger: "tinyRobot2_charger"
 #      responsive_wait: False
