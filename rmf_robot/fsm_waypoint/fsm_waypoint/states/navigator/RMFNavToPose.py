@@ -12,6 +12,7 @@ from tf2_ros import Buffer, TransformListener, TransformException
 from rclpy.time import Time
 from tf_transformations import quaternion_from_euler, euler_from_quaternion
 from sensor_msgs.msg import NavSatFix
+from std_msgs.msg import Float64
 
 # nav2
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
@@ -195,9 +196,6 @@ class RMFNavToPose(smach.State):
         self.path = []
         self.sequence = 0
         self.robot_name = next(iter(config["rmf_fleet"]["robots"].keys()))
-        # self.robot_name = "turtlebot3_1"  # gpuserver
-        # self.robot_name = "turtlebot3_0"  # nuc #1
-        # self.robot_name = "turtlebot3_2"  # nuc #2
         self.target_frame = "map"
         self.from_frame = "base_footprint"
         self.last_request_completed = None
@@ -209,8 +207,8 @@ class RMFNavToPose(smach.State):
         self.sub2_ = None
         self.ongoing_request_cmd_id = None  # Current task ID.
         self.ongoing_goal_handle = None  # New variable to store GoalHandle
-        # self.action_client = ActionClient(self.node, NavigateToPose, 'navigate_to_pose')
-        self.action_client = ActionClient(self.node, FollowGPSWaypoints, 'follow_gps_waypoints')
+        self.action_client = ActionClient(self.node, NavigateToPose, 'navigate_to_pose')
+        self.action_client_gps = ActionClient(self.node, FollowGPSWaypoints, 'follow_gps_waypoints')
         self.result_goal = None
         self.battery_level = 100.0
 
@@ -227,6 +225,10 @@ class RMFNavToPose(smach.State):
         self.pub_ = self.node.create_publisher(RobotState,
                                                '/robot_state',
                                                qos_profile=transient_qos)
+
+        self.pub2_ = self.node.create_publisher(Float64,
+                                           '/desired_speed',
+                                           qos_profile=transient_qos)
 
         self.reference_coordinates = config["fleet_manager"]["reference_coordinates"]["L1"]
         self.gps = False
@@ -245,29 +247,29 @@ class RMFNavToPose(smach.State):
         if not self.action_client.wait_for_server(timeout_sec=5.0):
             error("Action server not available for navigate_to_pose")
             return
-        
-        if not isinstance(destination_pose, list):
-            destination_pose = [destination_pose]
+        if self.gps:
+            if not isinstance(destination_pose, list):
+                destination_pose = [destination_pose]
+            goal_msg = FollowGPSWaypoints.Goal()
+            waypoints = []
+            for pose in destination_pose:
+                geo_pose = GeoPose()
+                geo_pose.position = GeoPoint(
+                    latitude=pose.position.latitude,
+                    longitude=pose.position.longitude,
+                    altitude=pose.position.altitude
+                )
+                geo_pose.orientation = pose.orientation
+                waypoints.append(geo_pose)
+            goal_msg.gps_poses = waypoints
+            self.ongoing_request_cmd_id = task_id
+            self.action_client_gps.send_goal_async(goal_msg).add_done_callback(self.goal_response_callback)
+        else:
+            goal_msg = NavigateToPose.Goal()
+            goal_msg.pose = destination_pose
 
-        goal_msg = FollowGPSWaypoints.Goal()
-        
-        waypoints = []
-        for pose in destination_pose:
-            geo_pose = GeoPose()
-            geo_pose.position = GeoPoint(
-                latitude=pose.position.latitude,
-                longitude=pose.position.longitude,
-                altitude=pose.position.altitude
-            )
-            geo_pose.orientation = pose.orientation  
-
-            waypoints.append(geo_pose)
-
-        goal_msg.gps_poses = waypoints
-        
-        self.ongoing_request_cmd_id = task_id
-        debug(f'goal_msg.pos: {destination_pose} ongoing_request_cmd_id: {task_id}')
-        self.action_client.send_goal_async(goal_msg).add_done_callback(self.goal_response_callback)
+            self.ongoing_request_cmd_id = task_id
+            self.action_client.send_goal_async(goal_msg).add_done_callback(self.goal_response_callback)
 
     def cancel_goal(self, ongoing_request_cmd_id):
         try:
@@ -337,6 +339,8 @@ class RMFNavToPose(smach.State):
                                                    self.gps_callback,
                                                    qos_profile=transient_qos
                                                    )
+
+
         self.ongoing_request_cmd_id = None  # reset ongoing_request_cmd_id
         self.path = [] # reset path
         userdata.blackboard.wait_spin = True
@@ -453,7 +457,6 @@ class RMFNavToPose(smach.State):
             current_location.yaw = target_yaw_rmf  # 계산된 yaw 값 적용
             current_location.t = self.node.get_clock().now().to_msg()
             current_location.level_name = "L1"  # 예시: 정적 레벨 이름
-            # info(f"Current Location: x={current_location.x}, y={current_location.y}, yaw={current_location.yaw}")
 
             # RobotMode 메시지 생성
             current_mode = RobotMode()
@@ -469,10 +472,6 @@ class RMFNavToPose(smach.State):
             robot_state_msg.mode = current_mode
             robot_state_msg.seq = self.sequence = self.sequence + 1
             robot_state_msg.path = [self.path[1]] if len(self.path) > 1 else []
-
-            # info(f"Publishing RobotState: name={robot_state_msg.name}, battery={robot_state_msg.battery_percent}, "
-            #      f"task_id={robot_state_msg.task_id}, mode={robot_state_msg.mode.mode}, seq={robot_state_msg.seq}")
-            # debug(f"RobotState Full Message: {robot_state_msg}")
 
             # 메시지 퍼블리싱
             self.pub_.publish(robot_state_msg)
@@ -497,7 +496,8 @@ class RMFNavToPose(smach.State):
 
             rmf_x, rmf_y = robot_to_rmf_transform(robot_x, robot_y, self.reference_coordinates)
             target_yaw_rmf = robot_to_rmf_yaw(orientation[2])
-            # self.makeup_robot_state_publisher(rmf_x, rmf_y, target_yaw_rmf)
+            if not self.gps:
+                self.makeup_robot_state_publisher(rmf_x, rmf_y, target_yaw_rmf)
 
             # info(f"RobotState details: name={robot_state_msg.name}, "
             #      f"task_id={robot_state_msg.task_id}, "
@@ -553,6 +553,7 @@ class RMFNavToPose(smach.State):
 
     # todo: stop 처리는 path[0], path[1]이 같은 경우로 일치시에 navigator.cancelTask() 호출
     def path_request_cb(self, msg):
+        # info(f'path_request_cb: {msg}')
         try:
             # info(f"Received PathRequest with task_id: {msg.task_id}")
             # Check if the task is already being processed
@@ -573,7 +574,6 @@ class RMFNavToPose(smach.State):
 
 
             self.path = msg.path
-            debug(f'path: {msg.path}')
 
             # todo: if not is_complete_path, cancelTask()
             # Check if a task is already running
@@ -594,6 +594,26 @@ class RMFNavToPose(smach.State):
             #             warning("Task cancellation timed out. Aborting new task.")
             #             return
             #         time.sleep(0.1)  # 반복 간격
+            # 우선순위에 따라 approach_speed_limit 결정
+            speed_to_publish = None
+
+            for location in msg.path:
+                if location.obey_approach_speed_limit:  # True가 있는 경우
+                    speed_to_publish = location.approach_speed_limit
+                    break  # 첫 번째 True 값 발견하면 즉시 종료
+
+            if speed_to_publish is None:  # True가 없으면 False 중 첫 번째 값 선택
+                for location in msg.path:
+                    speed_to_publish = location.approach_speed_limit
+                    break  # 첫 번째 False 값 발견하면 즉시 종료
+
+            if speed_to_publish is not None:
+                desired_speed_msg = Float64()
+                desired_speed_msg.data = speed_to_publish
+                info(f"Publishing desired_speed: {desired_speed_msg.data}")
+                self.pub2_.publish(desired_speed_msg)
+            else:
+                info("Skipping desired_speed publishing: No valid approach_speed_limit found.")
 
             if self.gps:
                 current_xy_data = {'x': msg.path[0].x, 'y': msg.path[0].y}

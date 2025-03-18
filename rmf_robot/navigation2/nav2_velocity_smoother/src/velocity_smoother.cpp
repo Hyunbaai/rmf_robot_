@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "nav2_velocity_smoother/velocity_smoother.hpp"
+#include "std_msgs/msg/float64.hpp"
 
 using namespace std::chrono_literals;
 using nav2_util::declare_parameter_if_not_declared;
@@ -33,6 +34,13 @@ VelocitySmoother::VelocitySmoother(const rclcpp::NodeOptions & options)
 : LifecycleNode("velocity_smoother", "", options),
   last_command_time_{0, 0, get_clock()->get_clock_type()}
 {
+    // /desired_speed 토픽 구독 설정
+    desired_speed_sub_ = this->create_subscription<std_msgs::msg::Float64>(
+    "/desired_speed", 1, std::bind(&VelocitySmoother::desiredSpeedCallback, this, _1));
+}
+void VelocitySmoother::desiredSpeedCallback(const std_msgs::msg::Float64::SharedPtr msg) {
+  desired_speed_ = msg->data;
+  RCLCPP_INFO(this->get_logger(), "Received desired speed: %f", desired_speed_);
 }
 
 VelocitySmoother::~VelocitySmoother()
@@ -293,6 +301,9 @@ void VelocitySmoother::smootherTimer()
     current_ = odom_smoother_->getTwist();
   }
 
+  if (desired_speed_ > 0.0f) {
+    command_->linear.x = std::min(static_cast<float>(command_->linear.x), static_cast<float>(desired_speed_));  // 원하는 속도와 비교하여 제한
+  }
   // Apply absolute velocity restrictions to the command
   command_->linear.x = std::clamp(command_->linear.x, min_velocities_[0], max_velocities_[0]);
   command_->linear.y = std::clamp(command_->linear.y, min_velocities_[1], max_velocities_[1]);

@@ -37,6 +37,7 @@ from rmf_fleet_msgs.msg import RobotState, Location, PathRequest, \
 import rmf_adapter as adpt
 import rmf_adapter.vehicletraits as traits
 import rmf_adapter.geometry as geometry
+from std_msgs.msg import String
 
 import numpy as np
 from pyproj import Transformer
@@ -143,16 +144,23 @@ class FleetManager(smach.State):
                              input_keys=['blackboard'],
                              output_keys=['blackboard']
                              )
+        self.sub0_ = None
+        self.sub1_ = None
+        self.sub2_ = None
         self.debug = False
         self.config = config
         self.node = node
         self.timeout = timeout
         self.fleet_name = self.config['rmf_fleet']['name']
+        self.robot_name = next(iter(self.config["rmf_fleet"]["robots"].keys()))
         mgr_config = self.config['fleet_manager']
+
+        info(f"{self.fleet_name}:{self.robot_name}")
 
         self.url = 'wss://j1hwdvving.execute-api.ap-northeast-2.amazonaws.com/dev'
         self.auth = '66fc47ba2013b66a223b5c8a6fac0926'
         # self.connection_id = ''
+        self.task_ids = []
         self.ws = None
         self.ws_thread = None
         self.connection_open = False  # WebSocket 연결 상태
@@ -179,7 +187,7 @@ class FleetManager(smach.State):
         self.robots = {}  # Map robot name to state
         self.action_paths = {}  # Map activities to paths
 
-        for robot_name, _ in self.config['rmf_fleet']['robots'].items():
+        for robot_name, _ in self.config['rmf_fleet']['robots'].items():  # server code로 인해서, 결국 한개임
             self.robots[robot_name] = State()
         assert(len(self.robots) > 0)
 
@@ -201,44 +209,11 @@ class FleetManager(smach.State):
         self.sio = socketio.Client()
         self.timer = self.node.create_timer(0.2, self.timer_callback)
 
-        @self.sio.on("/gps")
-        def message(data):
-            try:
-                robot = json.loads(data)
-                robot_name = robot['robot_id']
-                self.robots[robot_name].gps_to_xy(robot)
-            except KeyError as e:
-                self.get_logger().info(f"Malformed GPS Message!: {e}")
-
-        # if self.gps:
-        #     while True:
-        #         try:
-        #             self.sio.connect('http://0.0.0.0:8080')
-        #             break
-        #         except Exception:
-        #             self.node.get_logger().info(
-        #                 f"Trying to connect to sio server at"
-        #                 f"http://0.0.0.0:8080..")
-        #             time.sleep(1)
-
-
         transient_qos = QoSProfile(
             history=History.KEEP_LAST,
             depth=1,
             reliability=Reliability.RELIABLE,
             durability=Durability.TRANSIENT_LOCAL)
-
-        self.node.create_subscription(
-            RobotState,
-            'robot_state',
-            self.robot_state_cb,
-            qos_profile=transient_qos
-        )
-        self.node.create_subscription(
-            DockSummary,
-            'dock_summary',
-            self.dock_summary_cb,
-            qos_profile=transient_qos)
 
         self.path_pub = self.node.create_publisher(
             PathRequest,
@@ -526,12 +501,13 @@ class FleetManager(smach.State):
     def get_robot_state(self, robot: State, robot_name):
         data = {}
         if self.gps:
-            position = copy.deepcopy(robot.gps_pos)
+            # position = copy.deepcopy(robot.gps_pos)
+            position = [robot.state.location.x, robot.state.location.y]
         else:
             position = [robot.state.location.x, robot.state.location.y]
             # info(f"Location: {robot.state.location.x}, {robot.state.location.y}")
-        position = [robot.state.location.x, robot.state.location.y]
         angle = robot.state.location.yaw
+        data['fleet_name'] = self.fleet_name
         data['robot_name'] = robot_name
         data['map_name'] = robot.state.location.level_name
         data['position'] =\
@@ -588,6 +564,39 @@ class FleetManager(smach.State):
         return math.sqrt((A[0]-B[0])**2 + (A[1]-B[1])**2)
 
     def execute(self, userdata):
+        self.sub_list = []  # reset
+        transient_qos = QoSProfile(
+            history=History.KEEP_LAST,
+            depth=1,
+            reliability=Reliability.RELIABLE,
+            durability=Durability.TRANSIENT_LOCAL)
+
+        self.sub0_ = self.node.create_subscription(
+            RobotState,
+            'robot_state',
+            self.robot_state_cb,
+            qos_profile=transient_qos
+        )
+        self.sub1_ = self.node.create_subscription(
+            DockSummary,
+            'dock_summary',
+            self.dock_summary_cb,
+            qos_profile=transient_qos)
+        '''
+        ros2 topic pub -1 --keep-alive 5 /rmf_patrol_request std_msgs/msg/String "data: 'robot_task_request,patrol,t1 t2 t3'" --qos-durability transient_local
+        ros2 topic pub -1 --keep-alive 5 /rmf_patrol_request std_msgs/msg/String "data: 'cancel_task_request,0,0'" --qos-durability transient_local
+        
+        '''
+        self.sub2_ = self.node.create_subscription(
+            String,
+            '/rmf_patrol_request',
+            self.rmf_patrol_request_callback,
+            qos_profile=transient_qos)
+
+        self.sub_list.append(self.sub0_)
+        self.sub_list.append(self.sub1_)
+        self.sub_list.append(self.sub2_)
+
         start_time = time.time()
         info("FleetManager state executing...")
         self.connection_open = False  # reset
@@ -602,6 +611,7 @@ class FleetManager(smach.State):
         # 헤더 생성
         headers = {
             "Auth": self.auth,  # 인증 토큰
+            "fleet_name": self.fleet_name,
             "robot_name": robot_name  # robot_name 추가
         }
         self.connect(headers)
@@ -617,7 +627,7 @@ class FleetManager(smach.State):
                     break
 
                 if self.connection_closed:
-                    self.cleanup()  # 구독 해제 및 WebSocket 종료
+                    self.cleanup_only_wss()  # 구독 해제 및 WebSocket 종료, ws은 다시 연결하는데 sub은?
                     # outcome = 'aborted'
                     # break
                     self.connection_open = False  # reset
@@ -681,6 +691,24 @@ class FleetManager(smach.State):
                 cmd_id = data.get('cmd_id')
                 response = self.stop_robot(robot_name, cmd_id)
                 # info(f'response: {response}')
+            elif package.get('type') == 'response':
+                args = package.get('args')
+                data = args.get('message')
+                info(f'Get Response message: {data}')
+
+                task_type = data.get("type", "default_robot_task_request")
+
+                # robot_task_request이면 task_id 저장
+                if task_type == "robot_task_request":
+                    task_id = data.get("task_id")
+                    if task_id:
+                        self.task_ids.append(task_id)
+                        info(f'Stored task_id: {task_id} for robot {data["robot_name"]}')
+                    else:
+                        info(f'No task_id found in response: {data}')
+
+                elif task_type == "cancel_task_request":
+                    info(f'Received cancel_task_request response for task_id: {data.get("task_id")}')
             else:
                 error(f"Unknown message type.{package}")
 
@@ -701,8 +729,14 @@ class FleetManager(smach.State):
         """구독 해제 및 WebSocket 종료"""
         info("Cleaning up sub_list and closing WebSocket...")
         for sub in self.sub_list:
-            self.destroy_subscription(sub)  # 모든 구독 해제
+            self.node.destroy_subscription(sub)  # 모든 구독 해제
 
+        if self.ws:
+            self.ws.close()
+            if self.ws_thread and self.ws_thread.is_alive():
+                self.ws_thread.join()
+
+    def cleanup_only_wss(self):
         if self.ws:
             self.ws.close()
             if self.ws_thread and self.ws_thread.is_alive():
@@ -711,12 +745,12 @@ class FleetManager(smach.State):
     def format_robot_state(self, robot_state_data):
         # 기본 포맷에 맞게 데이터 구성
         temp = [
-            {'data': robot_state_data}  # 로봇 상태 데이터 포함
+            {
+                'data': robot_state_data
+            }  # 로봇 상태 데이터 포함
         ]
         # JSON 직렬화하여 반환
         data_to_send = json.dumps(temp)
-        
-        # info(f"[WebSocket] Sending data to AWS:\n{data_to_send}")
         return data_to_send
 
     def start_fastapi_server(self):
@@ -726,14 +760,83 @@ class FleetManager(smach.State):
                     log_level="warning"
                     )
 
+    def send_task_ids_one_by_one(self):
+        def send_next_task_id():
+            if self.task_ids:
+                # 한 개의 task_id를 꺼내서 전송
+                task_id = self.task_ids.pop(0)
+
+                temp = [
+                    {
+                        'request': {
+                            "fleet_name": self.fleet_name,
+                            "robot_name": self.robot_name,
+                            "type": "cancel_task_request",
+                            "task_id": task_id
+                        }
+                    }
+                ]
+                formatted_data = json.dumps(temp)
+                info(f'formatted_data: {formatted_data}')
+
+                if self.connection_open:
+                    try:
+                        self.ws.send(formatted_data)
+                        info(f"Sent task_id: {formatted_data}")
+                    except Exception as e:
+                        error(f"Failed to send task_id: {e}")
+
+                # 아직 task_ids가 남아있다면 1초 후 다음 task_id 전송
+                if self.task_ids:
+                    threading.Timer(1.0, send_next_task_id).start()
+            else:
+                info("All task_ids have been sent.")
+
+        # 첫 번째 실행 시작
+        send_next_task_id()
+
+    def rmf_patrol_request_callback(self, msg):
+        parts = msg.data.split(',')
+        if len(parts) < 3:
+            print(f"Invalid message format: {msg.data}")
+            return
+        # 🔹 파싱된 데이터 할당
+        task_type, category, value = parts
+        value = value.replace(' ', ',')
+
+        if task_type == "robot_task_request":
+            temp = [
+                {
+                    'request': {
+                        "fleet_name": self.fleet_name,
+                        "robot_name": self.robot_name,
+                        "type": task_type,
+                        "category": category,
+                        "value": value
+                    }
+                }
+            ]
+
+            formatted_data = json.dumps(temp)
+            info(f'formatted_data: {formatted_data}')
+            if self.connection_open:
+                try:
+                    self.ws.send(formatted_data)
+                    info(f"Sent data: {formatted_data}")
+                except Exception as e:
+                    error(f"Failed to send data: {e}")
+            else:
+                error("Cannot send data: WebSocket is not connected.")
+
+        elif task_type == "cancel_task_request":
+            self.send_task_ids_one_by_one()
+
     def navigate(self, robot_name, cmd_id, dest, map_name, speed_limit):
-        print(f'Navigate: {robot_name}, cmd_id: {cmd_id}, '
+        info(f'Navigate: {robot_name}, cmd_id: {cmd_id}, '
              f'x: {dest["x"]:.3f}, '
              f'y: {dest["y"]:.3f}, '
              f'yaw: {dest["yaw"]:.3f}'
              )
-        
-
         response = {'success': False, 'msg': ''}
         if (robot_name not in self.robots or len(dest) < 1):
             return response
@@ -749,10 +852,8 @@ class FleetManager(smach.State):
         target_map = map_name
         target_speed_limit = speed_limit
 
-        # target_x -= self.offset[0]
-        # target_y -= self.offset[1]
-
-        print(f'target_x:{target_x}, target_y:{target_y}')
+        target_x -= self.offset[0]
+        target_y -= self.offset[1]
 
         t = self.node.get_clock().now().to_msg()
 
@@ -788,9 +889,6 @@ class FleetManager(smach.State):
         path_request.path.append(target_loc)
         path_request.task_id = str(cmd_id)
         self.path_pub.publish(path_request)
-        
-        print(f'path_request.path:{path_request.path}')
-        sys.stdout.flush()
 
         if self.debug:
             print(f'Sending navigate request for {robot_name}: {cmd_id}')

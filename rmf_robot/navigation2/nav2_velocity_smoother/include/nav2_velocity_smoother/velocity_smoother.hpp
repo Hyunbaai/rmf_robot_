@@ -26,6 +26,7 @@
 #include "nav2_util/node_utils.hpp"
 #include "nav2_util/odometry_utils.hpp"
 #include "nav2_util/robot_utils.hpp"
+#include "std_msgs/msg/float64.hpp"
 
 namespace nav2_velocity_smoother
 {
@@ -154,6 +155,9 @@ protected:
   rclcpp::Time last_command_time_;
 
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr dyn_params_handler_;
+  rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr desired_speed_sub_;
+  void desiredSpeedCallback(const std_msgs::msg::Float64::SharedPtr msg);
+  float desired_speed_{0.0};
 };
 
 }  // namespace nav2_velocity_smoother

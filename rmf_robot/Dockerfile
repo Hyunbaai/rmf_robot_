@@ -2,14 +2,6 @@ FROM rmf_iron
 ARG DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-c"]
 
-
-RUN sed -i 's|http://security.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
-RUN rm -rf /var/lib/apt/lists/* \
-    && apt-get clean \
-    && apt-get update --fix-missing \
-    && apt-get update \
-    && apt-get upgrade -y --allow-downgrades --allow-remove-essential --allow-change-held-packages
-
 ## rolling에서는 안됨.
 RUN apt-get update && apt-get install -y ros-$ROS_DISTRO-nav2-bringup ros-$ROS_DISTRO-navigation2
 
@@ -40,12 +32,13 @@ RUN apt-get update && apt-get install -y \
     ros-$ROS_DISTRO-teleop-twist-keyboard \
     ros-$ROS_DISTRO-rmf-dev \
     ros-$ROS_DISTRO-tf-transformations \
-    ros-$ROS_DISTRO-test-msgs
+    ros-$ROS_DISTRO-test-msgs \
+    ros-$ROS_DISTRO-rviz-imu-plugin
 
 ## install smach
 RUN apt-get update && \
     apt-get install -y python3-pip && \
-    pip install --upgrade pip &&  \
+    pip install --upgrade pip setuptools setuptools_scm wheel build packaging &&  \
     pip install requests psutil py_trees pytz geographiclib supabase \
     fastapi \
     uvicorn \
@@ -58,21 +51,22 @@ WORKDIR /root/3rdparty
 RUN git clone https://github.com/gabrielsr/standalone-smach.git standalone-smach && \
     sed -i '247s/isAlive()/is_alive()/g' standalone-smach/smach/concurrence.py && \
     cd standalone-smach && \
-    python3 setup.py install
+    pip install --use-pep517 .
 
-WORKDIR /root
-COPY models.tar.gz /root/
-RUN mkdir -p /root/.gazebo && \
-    tar -xzvf models.tar.gz -C /root/.gazebo && \
-    rm models.tar.gz
+# install models
+#WORKDIR /root
+#COPY models.tar.gz /root/
+#RUN mkdir -p /root/.gazebo && \
+#    tar -xzvf models.tar.gz -C /root/.gazebo && \
+#    rm models.tar.gz
 
 WORKDIR /root/ws/src
 # nav2
 COPY navigation2/nav2_bringup nav2_bringup
 COPY navigation2/nav2_bt_navigator nav2_bt_navigator
 COPY navigation2/nav2_behavior_tree nav2_behavior_tree
+COPY navigation2/nav2_velocity_smoother nav2_velocity_smoother
 COPY navigation2_tutorials/nav2_straightline_planner nav2_straightline_planner
-COPY navigation2_tutorials/nav2_gps_waypoint_follower_demo nav2_gps_waypoint_follower_demo
 # fsm
 COPY fsm_waypoint fsm_waypoint
 # rmf
@@ -85,7 +79,6 @@ COPY rmf_demos_gz_classic rmf_demos_gz_classic
 COPY rmf_demos_maps rmf_demos_maps
 COPY rmf_demos_panel rmf_demos_panel
 COPY rmf_demos_tasks rmf_demos_tasks
-
 
 WORKDIR /root/ws
 RUN apt-get update && source /opt/ros/$ROS_DISTRO/setup.sh && \

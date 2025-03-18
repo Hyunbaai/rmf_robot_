@@ -1,0 +1,7 @@
+image: ingoffice_slam.pgm
+mode: trinary
+resolution: 0.05
+origin: [0.297, -9.65, 0]
+negate: 0
+occupied_thresh: 0.65
+free_thresh: 0.25

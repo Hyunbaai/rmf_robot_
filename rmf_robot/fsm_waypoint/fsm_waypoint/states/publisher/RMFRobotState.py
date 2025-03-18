@@ -93,10 +93,6 @@ class RMFRobotState(smach.State):
             ]
         }
 
-        
-
-        
-
     def execute(self, ud):
 
         start_time = time.time()
@@ -123,7 +119,6 @@ class RMFRobotState(smach.State):
                 robot_y = transform_stamped.transform.translation.y
 
                 rmf_x, rmf_y = robot_to_rmf_transform(robot_x, robot_y, self.reference_coordinates)
-                print(f"Converted RMF Coordinates: x={rmf_x}, y={rmf_y}")
 
                 current_location = Location()
                 current_location.x = rmf_x

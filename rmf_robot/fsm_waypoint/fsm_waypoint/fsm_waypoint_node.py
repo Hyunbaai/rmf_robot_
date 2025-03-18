@@ -162,14 +162,6 @@ def main(args=None):
     top = smach.StateMachine(outcomes=['succeeded', 'preempted', 'aborted', 'overall_success'])
     top.userdata.blackboard = init_blackboard()
 
-    # gl: config_file='/home/bcc/Works1/rmf_demos_robot/rmf_demos/config/turtlebot3_world/turtlebot3_world_config.yaml'
-    # config_file='/home/zeta/ws/install/rmf_demos/share/rmf_demos/config/turtlebot3_world/turtlebot3_world_config.yaml'
-    # config_file='/home/zeta/rmf_demos_robot/rmf_demos/config/turtlebot3_world/turtlebot3_world_config.yaml'
-    # config_file='/home/bcc/Works1/rmf_demos_robot/rmf_demos/config/office/tinyRobot_with_nav2_config.yaml'
-    # config_file='/home/zeta/rmf_demos_robot/rmf_demos/config/office/tinyRobot_with_nav2_config.yaml'
-    # config_file='/root/scripts/fsm/tinyRobot_with_nav2_config.yaml'
-    # config_file='/home/bcc/rmf_demos_robot/rmf_demos/config/office/tinyRobot_with_nav2_config.yaml'
-    # config_file='/root/ws/src/rmf_demos/config/office/tinyRobot_with_nav2_config.yaml'
     config_file = os.getenv("CONFIG_FILE", "/root/ws/src/rmf_demos/config/office/tinyRobot_with_nav2_config.yaml")
 
     with open(config_file, "r") as f:

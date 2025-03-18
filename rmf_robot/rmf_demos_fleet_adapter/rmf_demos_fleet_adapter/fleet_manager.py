@@ -293,7 +293,7 @@ class FleetManager(Node):
                     },
                     "battery_percent": msg.battery_percent,
                 }
-                url = "http://192.168.0.242:22011/open-rmf/rmf_demos_fm/sub_robot_state/"
+                url = "http://192.168.1.249:22011/open-rmf/rmf_demos_fm/sub_robot_state/"
                 response = requests.post(url, json=payload)
                 if response.status_code == 200:
                     # debug(f"Successfully forwarded state for {msg.name}")
