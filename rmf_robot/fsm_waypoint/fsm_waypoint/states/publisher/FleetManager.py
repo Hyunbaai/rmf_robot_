@@ -268,8 +268,10 @@ class FleetManager(smach.State):
             target_map = dest.map_name
             target_speed_limit = dest.speed_limit
 
-            target_x -= self.offset[0]
-            target_y -= self.offset[1]
+            # target_x -= self.offset[0]
+            # target_y -= self.offset[1]
+
+            debug(f'Debug for target_x, target_y: {target_x},{target_y}')
 
             t = self.node.get_clock().now().to_msg()
 
@@ -852,8 +854,9 @@ class FleetManager(smach.State):
         target_map = map_name
         target_speed_limit = speed_limit
 
-        target_x -= self.offset[0]
-        target_y -= self.offset[1]
+        # target_x -= self.offset[0]
+        # target_y -= self.offset[1]
+        debug(f'target_x, target_y:{target_x},{target_y}')
 
         t = self.node.get_clock().now().to_msg()
 
